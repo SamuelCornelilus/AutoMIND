@@ -1,9 +1,15 @@
 name: CI — tests
-on: [push]
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
 
 jobs:
   test:
     runs-on: ubuntu-latest
+
     services:
       postgres:
         image: postgres:15
@@ -14,51 +20,54 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U automind -d automind"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+          --health-cmd="pg_isready -U automind"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-      - name: Setup Python
+      - name: Setup Python 3.11
         uses: actions/setup-python@v4
         with:
           python-version: "3.11"
 
-      - name: Create and activate virtualenv, install deps
+      - name: Create virtualenv & upgrade pip
         run: |
           python -m venv .venv
           . .venv/bin/activate
-          python -m pip install --upgrade pip setuptools wheel
-          if [ -f backend/requirements.txt ]; then
-            pip install --no-cache-dir -r backend/requirements.txt
-          fi
+          pip install --upgrade pip
 
-      - name: Export DATABASE_URL for app & tests
+      - name: Install backend dependencies (from backend/requirements.txt)
         run: |
-          echo "DATABASE_URL=postgresql://automind:automind_pass_change_me@localhost:5432/automind" >> $GITHUB_ENV
+          . .venv/bin/activate
+          pip install -r backend/requirements.txt
+
+      - name: Export DATABASE_URL
+        run: echo "DATABASE_URL=postgres://automind:automind_pass_change_me@127.0.0.1:5432/automind" >> $GITHUB_ENV
 
       - name: Start backend (uvicorn) in background
         run: |
           . .venv/bin/activate
-          # pindah ke folder backend dan mulai uvicorn di background
-          cd backend
-          # jalankan uvicorn, log ke file, proses dijalankan di background
-          nohup python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level info > ../uvicorn.log 2>&1 &
-          # tunggu sampai /health merespon (max 60 detik)
-          retries=0
-          until curl -sSf http://127.0.0.1:8000/health || [ $retries -ge 30 ]; do
-            echo "Waiting for backend... ($retries)"
-            sleep 2
-            retries=$((retries+1))
-          done
-          echo "backend ready (or timeout reached)."
+          nohup uvicorn backend.main:app --host 0.0.0.0 --port 8000 >/dev/null 2>&1 &
 
-      - name: Run tests
+      - name: Wait for backend to be ready
         run: |
-          . .venv/bin/activate
-          cd backend
+          for i in {1..15}; do
+            if curl -sSf http://127.0.0.1:8000/health >/dev/null; then
+              echo "backend ready"
+              exit 0
+            fi
+            echo "waiting for backend..."
+            sleep 1
+          done
+          echo "backend did not start" >&2
+          exit 1
+
+      - name: Run tests (from backend folder)
+        working-directory: backend
+        run: |
+          . ../.venv/bin/activate
           pytest -q
