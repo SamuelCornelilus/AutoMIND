@@ -1,0 +1,10 @@
+__pycache__
+*.pyc
+*.pyo
+.vscode
+.venv
+env/
+db.sqlite
+data/
+models/*.joblib
+models/*.npz

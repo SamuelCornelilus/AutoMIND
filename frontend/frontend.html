@@ -1,0 +1,194 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>AutoMIND - Demo UI</title>
+  <style>
+    body { font-family: system-ui, Arial; max-width:900px; margin:32px auto; }
+    .card { padding:16px; border:1px solid #ddd; border-radius:6px; margin-bottom:12px; }
+    input, textarea { width:100%; padding:8px; margin-top:6px; box-sizing:border-box; }
+    button { padding:8px 12px; margin-top:8px; }
+    .small { font-size:0.9em; color:#666 }
+    .result { padding:8px; border-bottom:1px solid #eee; }
+    pre { background:#111; color:#cfc; padding:10px; border-radius:6px; overflow:auto; }
+    .meta { color:#666; font-size:0.9em; margin-bottom:6px; }
+  </style>
+</head>
+<body>
+  <h1>AutoMIND — Demo</h1>
+
+  <div id="auth-card" class="card">
+    <h3>Login</h3>
+    <label>Username</label>
+    <input id="username" value="sam_test" />
+    <label>Password</label>
+    <input id="password" type="password" value="Secret123" />
+    <div>
+      <button id="loginBtn">Login</button>
+      <button id="logoutBtn" style="display:none">Logout</button>
+    </div>
+    <div class="small">Token: <span id="tokenLabel">—</span></div>
+  </div>
+
+  <div class="card">
+    <h3>Query RAG</h3>
+    <label>Query</label>
+    <textarea id="query" rows="3">Jelaskan AutoMIND secara singkat</textarea>
+    <label>Top K</label>
+    <input id="topk" value="3" />
+    <div>
+      <button id="runBtn">Run Query</button>
+      <button id="historyBtn">Show My History</button>
+    </div>
+    <div id="resDiv" style="margin-top:12px"></div>
+  </div>
+
+  <div id="historyCard" class="card" style="display:none">
+    <h3>My Query History</h3>
+    <div id="historyList"></div>
+  </div>
+
+<script>
+const API_BASE = "http://127.0.0.1:8000";
+const tokenKey = "automind_token";
+
+function setToken(t){
+  if(t){
+    localStorage.setItem(tokenKey, t);
+    document.getElementById("tokenLabel").textContent = t.slice(0,24)+"…";
+    document.getElementById("logoutBtn").style.display = "inline-block";
+  }else{
+    localStorage.removeItem(tokenKey);
+    document.getElementById("tokenLabel").textContent = "—";
+    document.getElementById("logoutBtn").style.display = "none";
+  }
+}
+
+function getToken(){ return localStorage.getItem(tokenKey); }
+
+document.getElementById("loginBtn").addEventListener("click", async () => {
+  const u = document.getElementById("username").value;
+  const p = document.getElementById("password").value;
+  try{
+    const fd = new URLSearchParams();
+    fd.append("username", u);
+    fd.append("password", p);
+    const r = await fetch(`${API_BASE}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: fd.toString()
+    });
+    if(!r.ok){
+      const j = await r.json().catch(()=>({detail: r.statusText}));
+      alert("Login failed: " + (j.detail || r.status));
+      return;
+    }
+    const j = await r.json();
+    setToken(j.access_token);
+    alert("Logged in.");
+  }catch(e){ alert("Network/login error: "+e); }
+});
+
+document.getElementById("logoutBtn").addEventListener("click", () => {
+  setToken(null);
+  alert("Logged out.");
+});
+
+document.getElementById("runBtn").addEventListener("click", async () => {
+  const q = document.getElementById("query").value;
+  const topk = parseInt(document.getElementById("topk").value||3,10);
+  const token = getToken();
+  if(!token){ alert("Please login first."); return; }
+  const resDiv = document.getElementById("resDiv");
+  resDiv.innerHTML = "<em>Loading...</em>";
+  try{
+    const r = await fetch(`${API_BASE}/rag/rag/query`, {
+      method: "POST",
+      headers: {
+        "Content-Type":"application/json",
+        "Authorization": "Bearer " + token
+      },
+      body: JSON.stringify({ query: q, top_k: topk })
+    });
+    if(!r.ok){
+      const j = await r.json().catch(()=>({detail: r.statusText}));
+      resDiv.innerHTML = `<pre style="color:red">${JSON.stringify(j,null,2)}</pre>`;
+      return;
+    }
+    const j = await r.json();
+    let html = `<h4>Results for: <b>${escapeHtml(j.query)}</b></h4>`;
+    j.results.forEach(it => {
+      html += `<div class="result"><div class="meta"><b>Score</b>: ${it.score.toFixed(4)}</div><div>${escapeHtml(it.text)}</div></div>`;
+    });
+    resDiv.innerHTML = html;
+  }catch(e){
+    resDiv.innerHTML = `<pre style="color:red">${e}</pre>`;
+  }
+});
+
+document.getElementById("historyBtn").addEventListener("click", async () => {
+  const token = getToken();
+  if(!token){ alert("Please login first."); return; }
+  try{
+    // minta history; server mendukung limit/offset tetapi kita pakai default
+    const r = await fetch(`${API_BASE}/rag/rag/history?limit=50&offset=0`, {
+      method:"GET",
+      headers: { "Authorization": "Bearer " + token }
+    });
+    if(!r.ok){
+      const j = await r.json().catch(()=>({detail:r.statusText}));
+      alert("Failed: "+(j.detail||r.status));
+      return;
+    }
+
+    // backend returns { items: [...], total: N }
+    const payload = await r.json();
+    const list = document.getElementById("historyList");
+    list.innerHTML = "";
+
+    if(!payload || !Array.isArray(payload.items) || payload.items.length === 0){
+      list.innerHTML = "<div class='small'>No history yet</div>";
+      document.getElementById("historyCard").style.display = "block";
+      return;
+    }
+
+    // render each history item
+    payload.items.forEach(h => {
+      const block = document.createElement("div");
+      block.style.padding="8px";
+      block.style.borderBottom="1px solid #eee";
+
+      // render results nicely
+      let resultsHtml = "";
+      if(Array.isArray(h.results) && h.results.length>0){
+        h.results.forEach(rdoc => {
+          resultsHtml += `<div class="result"><div class="meta">Score: ${rdoc.score.toFixed(4)}</div><div>${escapeHtml(rdoc.text)}</div></div>`;
+        });
+      }else{
+        resultsHtml = `<div class="small">No results stored</div>`;
+      }
+
+      block.innerHTML = `<div class="small">#${h.id} — ${escapeHtml(h.created_at)} — query: <b>${escapeHtml(h.query)}</b></div>
+                         <div>${resultsHtml}</div>`;
+      list.appendChild(block);
+    });
+
+    document.getElementById("historyCard").style.display = "block";
+  }catch(e){
+    alert("Error fetching history: "+e);
+  }
+});
+
+// small helper: escape HTML to avoid accidental injection
+function escapeHtml(s){
+  if(typeof s !== "string") return s;
+  return s.replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c])
+  );
+}
+
+// init
+setToken(localStorage.getItem(tokenKey));
+</script>
+</body>
+</html>

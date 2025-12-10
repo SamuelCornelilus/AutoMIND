@@ -1,0 +1,19 @@
+# ENV & secrets
+backend/.env
+
+# Python caches
+__pycache__/
+*.pyc
+
+# IDE & venv
+.vscode/
+.venv/
+backend/.venv/
+
+# Database
+backend/app/db.sqlite
+backup_sqlite/
+
+# Models & binaries
+models/
+.DS_Store

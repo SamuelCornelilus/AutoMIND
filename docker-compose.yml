@@ -1,0 +1,55 @@
+# docker-compose.yml (production/dev simple)
+services:
+  db:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: automind
+      POSTGRES_USER: automind
+      POSTGRES_PASSWORD: automind_pass_change_me
+    volumes:
+      - automind_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U automind"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+
+    # ----------------------------
+    # 🔥 Bagian penting yang saya tambahkan:
+    env_file:
+      - ./backend/.env
+    # ----------------------------
+
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/srv/app:cached
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 20s
+      timeout: 3s
+      retries: 3
+
+  frontend:
+    image: nginx:stable
+    restart: unless-stopped
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  automind_pgdata:
