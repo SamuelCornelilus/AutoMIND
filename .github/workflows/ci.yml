@@ -1,0 +1,59 @@
+name: CI — tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: automind
+          POSTGRES_USER: automind
+          POSTGRES_PASSWORD: automind_pass_change_me
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U automind"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Wait for Postgres to be ready
+        run: |
+          for i in {1..30}; do
+            pg_isready -h 127.0.0.1 -p 5432 -U automind && break
+            sleep 1
+          done
+        env:
+          PGPASSWORD: automind_pass_change_me
+
+      - name: Create and activate virtualenv, install deps
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          python -m pip install --upgrade pip setuptools wheel
+          pip install -r backend/requirements.txt
+
+      - name: Export DATABASE_URL for tests
+        run: |
+          echo "DATABASE_URL=postgresql://automind:automind_pass_change_me@127.0.0.1:5432/automind" >> $GITHUB_ENV
+
+      - name: Run tests
+        run: |
+          . .venv/bin/activate
+          pytest -q
