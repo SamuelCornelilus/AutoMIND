@@ -1,8 +1,9 @@
-# app/db.py
+# backend/app/db.py
 import os
 from typing import Generator
+
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base, Session
+from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 # lokasi file sqlite (relatif ke project)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # app/
@@ -15,8 +16,9 @@ engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 # SessionLocal factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Base model (untuk deklarative models)
+# Base model (untuk declarative models)
 Base = declarative_base()
+
 
 def get_db() -> Generator[Session, None, None]:
     """
@@ -28,6 +30,7 @@ def get_db() -> Generator[Session, None, None]:
         yield db
     finally:
         db.close()
+
 
 def create_db_and_tables():
     """
@@ -42,11 +45,17 @@ def create_db_and_tables():
     # IMPORT semua module model di sini supaya mereka mendaftarkan metadata ke Base
     # (Jika Anda punya models lain, tambahkan di sini)
     try:
-        from . import models_auth     # user table
+        # import hanya untuk side-effect (mendaftarkan model ke Base.metadata)
+        from . import models_auth  # type: ignore # noqa: F401
     except Exception:
-        pass
+        import sys
+        import traceback
+
+        print("warning: import backend.app.models_auth gagal", file=sys.stderr)
+        traceback.print_exc()
+
     try:
-        from . import models_history  # history table
+        from . import models_history  # type: ignore # noqa: F401
     except Exception:
         pass
 

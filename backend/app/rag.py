@@ -1,16 +1,19 @@
 # app/rag.py
+import json
+import os
+from typing import List, Optional
+
+import joblib
+import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from typing import List, Optional
-import joblib, os, json
-from sqlalchemy.orm import Session
 from sklearn.metrics.pairwise import cosine_similarity
-import numpy as np
+from sqlalchemy.orm import Session
 
-from .db import get_db
-from .models_history import QueryHistory
-from .models_auth import User
 from .auth import get_current_user
+from .db import get_db
+from .models_auth import User
+from .models_history import QueryHistory
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODELS_DIR = os.path.join(ROOT, "models")
@@ -26,6 +29,7 @@ _answers = None
 _questions = None
 _load_error = None
 
+
 def ensure_models_loaded():
     global _vectorizer, _matrix, _answers, _questions, _load_error
     if _load_error:
@@ -40,6 +44,7 @@ def ensure_models_loaded():
             _load_error = str(e)
             raise
 
+
 def retrieve(query: str, top_k: int = 3):
     ensure_models_loaded()
     q_vec = _vectorizer.transform([query])
@@ -48,28 +53,30 @@ def retrieve(query: str, top_k: int = 3):
 
     results = []
     for i in idxs:
-        results.append({
-            "id": int(i),
-            "score": float(sims[i]),
-            "text": str(_answers[i])
-        })
+        results.append(
+            {"id": int(i), "score": float(sims[i]), "text": str(_answers[i])}
+        )
     return results
 
 
 router = APIRouter(prefix="/rag/rag", tags=["rag"])
 
+
 class RagQueryRequest(BaseModel):
     query: str
     top_k: int = 3
+
 
 class RagDoc(BaseModel):
     id: int
     score: float
     text: str
 
+
 class RagQueryResponse(BaseModel):
     query: str
     results: List[RagDoc]
+
 
 class HistoryItem(BaseModel):
     id: int
@@ -78,15 +85,17 @@ class HistoryItem(BaseModel):
     results: List[RagDoc]
     created_at: str
 
+
 class HistoryList(BaseModel):
     items: List[HistoryItem]
     total: int
+
 
 @router.post("/query", response_model=RagQueryResponse)
 def rag_query(
     req: RagQueryRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
     Retrieval API + menyimpan history ke database.
@@ -102,7 +111,7 @@ def rag_query(
         history = QueryHistory(
             user_id=current_user.id,
             query=req.query,
-            results=json.dumps(results, ensure_ascii=False)
+            results=json.dumps(results, ensure_ascii=False),
         )
         db.add(history)
         db.commit()
@@ -127,7 +136,9 @@ def get_history(
     try:
         q = db.query(QueryHistory).filter(QueryHistory.user_id == current_user.id)
         total = q.count()
-        rows = q.order_by(QueryHistory.created_at.desc()).limit(limit).offset(offset).all()
+        rows = (
+            q.order_by(QueryHistory.created_at.desc()).limit(limit).offset(offset).all()
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"DB error: {e}")
 
@@ -140,17 +151,25 @@ def get_history(
         # convert parsed_results items into RagDoc-like dicts
         docs = []
         for it in parsed_results:
-            docs.append({
-                "id": int(it.get("id", -1)),
-                "score": float(it.get("score", 0.0)),
-                "text": str(it.get("text", ""))
-            })
-        items.append({
-            "id": r.id,
-            "user_id": r.user_id,
-            "query": r.query,
-            "results": docs,
-            "created_at": r.created_at.isoformat() if hasattr(r.created_at, "isoformat") else str(r.created_at)
-        })
+            docs.append(
+                {
+                    "id": int(it.get("id", -1)),
+                    "score": float(it.get("score", 0.0)),
+                    "text": str(it.get("text", "")),
+                }
+            )
+        items.append(
+            {
+                "id": r.id,
+                "user_id": r.user_id,
+                "query": r.query,
+                "results": docs,
+                "created_at": (
+                    r.created_at.isoformat()
+                    if hasattr(r.created_at, "isoformat")
+                    else str(r.created_at)
+                ),
+            }
+        )
 
     return {"items": items, "total": total}

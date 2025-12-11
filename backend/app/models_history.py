@@ -1,7 +1,10 @@
 # app/models_history.py
-from sqlalchemy import Column, Integer, Text, DateTime, ForeignKey
 from datetime import datetime
+
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, Text
+
 from .db import Base
+
 
 class QueryHistory(Base):
     __tablename__ = "query_history"

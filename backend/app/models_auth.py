@@ -1,7 +1,10 @@
 # backend/app/models_auth.py
-from sqlalchemy import Column, Integer, String, DateTime
 from datetime import datetime
+
+from sqlalchemy import Column, DateTime, Integer, String
+
 from .db import Base
+
 
 class User(Base):
     __tablename__ = "users"

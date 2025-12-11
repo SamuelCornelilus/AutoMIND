@@ -1,6 +1,10 @@
 # backend/app/inspect_db.py
-import sqlite3, json, os
+import json
+import os
+import sqlite3
+
 DB = os.path.join(os.path.dirname(__file__), "db.sqlite")
+
 
 def main():
     print("DB path:", DB)
@@ -12,7 +16,9 @@ def main():
     cur = con.cursor()
 
     print("\n--- Tables ---")
-    for r in cur.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall():
+    for r in cur.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'"
+    ).fetchall():
         print(" -", r[0])
 
     print("\n--- Query history sample (latest 50) ---")
@@ -30,11 +36,15 @@ def main():
                 parsed = results[:200] if results else ""
             print(f"\nid={id_} user_id={uid} created_at={created_at}")
             print(" query:", q)
-            print(" results (first 2):", parsed[:2] if isinstance(parsed, list) else parsed)
+            print(
+                " results (first 2):",
+                parsed[:2] if isinstance(parsed, list) else parsed,
+            )
     except Exception as e:
         print("Could not query query_history:", e)
 
     con.close()
+
 
 if __name__ == "__main__":
     main()

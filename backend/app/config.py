@@ -8,6 +8,7 @@
 
 import os
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 # ---------------------------------------------------------------------
@@ -26,6 +27,7 @@ def _getenv(key, default=None):
     val = os.getenv(key)
     return val if val is not None else default
 
+
 def _getint(key, default):
     try:
         val = os.getenv(key)
@@ -39,7 +41,9 @@ def _getint(key, default):
 # ---------------------------------------------------------------------
 SECRET_KEY = _getenv("SECRET_KEY", "replace-me-with-a-strong-secret-in-prod")
 ALGORITHM = _getenv("ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = _getint("ACCESS_TOKEN_EXPIRE_MINUTES", 60 * 24 * 7)  # Default 7 hari
+ACCESS_TOKEN_EXPIRE_MINUTES = _getint(
+    "ACCESS_TOKEN_EXPIRE_MINUTES", 60 * 24 * 7
+)  # Default 7 hari
 
 
 # ---------------------------------------------------------------------

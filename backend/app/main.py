@@ -1,15 +1,16 @@
 # backend/app/main.py
 from fastapi import FastAPI
-from fastapi.openapi.utils import get_openapi
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
 
-from .create_tables import create_db_and_tables
 from .auth import router as auth_router
+from .create_tables import create_db_and_tables
 
 # rag router: kalau Anda punya app/rag.py yang mendefinisikan `router = APIRouter(prefix="/rag", ...)`
 # maka kita sertakan. Jika belum ada, baris include_router(rag_router) tidak boleh dieksekusi.
 try:
     from .rag import router as rag_router
+
     HAS_RAG = True
 except Exception:
     HAS_RAG = False
@@ -72,17 +73,17 @@ def custom_openapi():
     openapi_schema["components"]["securitySchemes"]["BearerAuth"] = {
         "type": "http",
         "scheme": "bearer",
-        "bearerFormat": "JWT"
+        "bearerFormat": "JWT",
     }
 
     # daftar path yang TIDAK harus diberi security otomatis (boleh ditambah)
     exclude_paths = {
         "/auth/register",  # register publik
-        "/auth/login",     # login publik
-        "/health",         # health check publik
-        "/openapi.json",   # schema
-        "/docs",           # docs UI
-        "/redoc",          # redoc UI (jika ada)
+        "/auth/login",  # login publik
+        "/health",  # health check publik
+        "/openapi.json",  # schema
+        "/docs",  # docs UI
+        "/redoc",  # redoc UI (jika ada)
     }
 
     # set security untuk semua path/method kecuali yang dikecualikan

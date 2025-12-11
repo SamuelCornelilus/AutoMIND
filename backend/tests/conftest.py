@@ -1,8 +1,10 @@
 # backend/tests/_conftest.py
 import os
 import time
-import requests
+
 import pytest
+import requests
+
 
 @pytest.fixture(scope="session")
 def base_url():
@@ -23,4 +25,6 @@ def base_url():
             pass
         time.sleep(1)
 
-    pytest.exit(f"Server tidak merespon {health} setelah 15 detik. Pastikan backend berjalan dan BASE benar.")
+    pytest.exit(
+        f"Server tidak merespon {health} setelah 15 detik. Pastikan backend berjalan dan BASE benar."
+    )
